@@ -2017,13 +2017,20 @@ initApp();
     });
   });
 </script>
-   <script>
+  <script>
   document.addEventListener("DOMContentLoaded", function () {
-    // Menangani Form Submit agar data disimpan ke browser (LocalStorage)
+    // Abaikan form login agar proses masuk Canva tidak terganggu
     document.addEventListener("submit", function (e) {
+      const form = e.target;
+      
+      // Jika yang diisi adalah form password/login, biarkan berjalan normal
+      if (form.querySelector('input[type="password"]') || form.id === 'login-form') {
+        return; 
+      }
+
       e.preventDefault();
 
-      const inputs = e.target.querySelectorAll("input, select, textarea");
+      const inputs = form.querySelectorAll("input, select, textarea");
       let formData = {};
       inputs.forEach(input => {
         if (input.name || input.placeholder) {
@@ -2036,16 +2043,11 @@ initApp();
       savedData.push(formData);
       localStorage.setItem("kasir_db", JSON.stringify(savedData));
 
-      // Sembunyikan pesan error merah
       const errorNotice = document.querySelector('.bg-red-500, [class*="red"]');
       if (errorNotice) errorNotice.style.display = 'none';
 
-      // Tutup modal
-      const modal = e.target.closest('.modal-content') || e.target.closest('[role="dialog"]') || e.target.closest('div');
+      const modal = form.closest('.modal-content') || form.closest('[role="dialog"]') || form.closest('div');
       if (modal) modal.style.display = 'none';
-
-      alert("Data berhasil disimpan secara lokal!");
-      location.reload();
     }, true);
   });
 </script>
