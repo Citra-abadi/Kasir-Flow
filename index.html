@@ -2017,4 +2017,36 @@ initApp();
     });
   });
 </script>
+   <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Menangani Form Submit agar data disimpan ke browser (LocalStorage)
+    document.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const inputs = e.target.querySelectorAll("input, select, textarea");
+      let formData = {};
+      inputs.forEach(input => {
+        if (input.name || input.placeholder) {
+          let key = input.name || input.placeholder;
+          formData[key] = input.value;
+        }
+      });
+
+      let savedData = JSON.parse(localStorage.getItem("kasir_db") || "[]");
+      savedData.push(formData);
+      localStorage.setItem("kasir_db", JSON.stringify(savedData));
+
+      // Sembunyikan pesan error merah
+      const errorNotice = document.querySelector('.bg-red-500, [class*="red"]');
+      if (errorNotice) errorNotice.style.display = 'none';
+
+      // Tutup modal
+      const modal = e.target.closest('.modal-content') || e.target.closest('[role="dialog"]') || e.target.closest('div');
+      if (modal) modal.style.display = 'none';
+
+      alert("Data berhasil disimpan secara lokal!");
+      location.reload();
+    }, true);
+  });
+</script>
 </body></html>
