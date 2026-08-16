@@ -644,28 +644,51 @@ const dataHandler = {
 
 function failedResult(){return{isOk:false,isError:true,error:new Error('Penyimpanan tidak tersedia')}}
 async function sdkCreate(record) {
-  if(allData.length >= 999){showToast('Batas 999 data tercapai','error');return failedResult()}
-  try{
-    if(!window.dataSdk||typeof window.dataSdk.create!=='function')throw new Error('SDK unavailable');
-    const r=await window.dataSdk.create(record);
-    if(!r||!r.isOk) showToast('Gagal menyimpan. Periksa koneksi penyimpanan lalu coba lagi.','error');
-    return r||failedResult();
-  }catch(e){showToast('Gagal menyimpan. Coba lagi.','error');return failedResult()}
+  if (allData.length >= 999) {
+    showToast('Batas 999 data tercapai', 'error');
+    return failedResult();
+  }
+  try {
+    if (!record.__backendId) {
+      record.__backendId = 'id_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    }
+    allData.push(record);
+    safeSave('kasir_local_data', allData);
+    if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
+    return { isOk: true, isError: false, data: record };
+  } catch (e) {
+    showToast('Gagal menyimpan. Coba lagi.', 'error');
+    return failedResult();
+  }
 }
+
 async function sdkUpdate(record) {
-  try{
-    if(!window.dataSdk||typeof window.dataSdk.update!=='function')throw new Error('SDK unavailable');
-    const r=await window.dataSdk.update(record);
-    if(!r||!r.isOk) showToast('Gagal memperbarui data','error');
-    return r||failedResult();
-  }catch(e){showToast('Gagal memperbarui data. Coba lagi.','error');return failedResult()}
+  try {
+    const index = allData.findIndex(item => item.__backendId === record.__backendId);
+    if (index !== -1) {
+      allData[index] = { ...allData[index], ...record };
+      safeSave('kasir_local_data', allData);
+      if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
+      return { isOk: true, isError: false };
+    }
+    return failedResult();
+  } catch (e) {
+    showToast('Gagal memperbarui data. Coba lagi.', 'error');
+    return failedResult();
+  }
 }
+
 async function sdkDelete(record) {
-  try{
-    if(!window.dataSdk||typeof window.dataSdk.delete!=='function')throw new Error('SDK unavailable');
-    const r=await window.dataSdk.delete(record);
-    if(!r||!r.isOk) showToast('Gagal menghapus data','error');
-    return r||failedResult();
+  try {
+    allData = allData.filter(item => item.__backendId !== record.__backendId);
+    safeSave('kasir_local_data', allData);
+    if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
+    return { isOk: true, isError: false };
+  } catch (e) {
+    showToast('Gagal menghapus data. Coba lagi.', 'error');
+    return failedResult();
+  }
+}
   }catch(e){showToast('Gagal menghapus data. Coba lagi.','error');return failedResult()}
 }
 
