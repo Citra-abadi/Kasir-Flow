@@ -688,14 +688,10 @@ async function sdkDelete(record) {
     showToast('Gagal menghapus data. Coba lagi.', 'error');
     return failedResult();
   }
-}
-  }catch(e){showToast('Gagal menghapus data. Coba lagi.','error');return failedResult()}
-}
 
-async function addLog(action, details=''){
-  if(allData.length>=999)return;
-  await sdkCreate({...makeEmpty(),type:'log',username:currentUser||'',role:currentRole||'',action,timestamp:nowISO(),details});
-}
+async function addLog(action, details='') {
+  if (allData.length >= 999) return;
+  await sdkCreate({ ...makeEmpty(), type: 'log', username: currentUser || '', role: currentRole || '', action, timestamp: nowISO(), details });
 
 // ============ AUTH ============
 const adminPages=[{id:'beranda',icon:'home',label:'Beranda'},{id:'customer',icon:'contact-round',label:'Data Customer'},{id:'kategori',icon:'tags',label:'Kategori'},{id:'produk',icon:'package',label:'Produk'},{id:'kasir',icon:'monitor',label:'Kasir'},{id:'riwayat',icon:'clock',label:'Riwayat'},{id:'barang-masuk',icon:'package-plus',label:'Barang Masuk'},{id:'stok-kritis',icon:'alert-triangle',label:'Stok Kosong'},{id:'laporan',icon:'bar-chart-2',label:'Laporan'},{id:'laporan-keuangan',icon:'trending-up',label:'Lap. Keuangan'},{id:'setoran',icon:'wallet',label:'Setoran'},{id:'akun',icon:'users',label:'Akun'},{id:'toko',icon:'store',label:'Toko'},{id:'log',icon:'file-text',label:'Log'}];
