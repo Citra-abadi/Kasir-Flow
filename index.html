@@ -1130,14 +1130,38 @@ document.addEventListener('keydown',function(e){
   focusCatalogButton(e.key==='ArrowRight'?'right':e.key==='ArrowLeft'?'left':e.key==='ArrowDown'?'down':'up');
 });
 document.getElementById('si-product-search').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();const q=this.value.trim();const p=findProductByQuery(q);if(p)handleBarcode(p.barcode||p.sku||q);else if(q)showToast('Produk dengan barcode '+q+' belum terdaftar!','error')}});
+
 document.getElementById('pos-category-filter').addEventListener('change',filterPOS);
 
+function muatDataPenyimpanan() {
+  const simpananProduk = localStorage.getItem('kasir_produk');
+  const simpananTransaksi = localStorage.getItem('kasir_transaksi');
+  const simpananCustomer = localStorage.getItem('kasir_customer');
+
+  if (simpananProduk) window.dataProduk = JSON.parse(simpananProduk);
+  if (simpananTransaksi) window.dataTransaksi = JSON.parse(simpananTransaksi);
+  if (simpananCustomer) window.dataCustomer = JSON.parse(simpananCustomer);
+}
+
+function simpanKeLocalStorage() {
+  if (window.dataProduk) localStorage.setItem('kasir_produk', JSON.stringify(window.dataProduk));
+  if (window.dataTransaksi) localStorage.setItem('kasir_transaksi', JSON.stringify(window.dataTransaksi));
+  if (window.dataCustomer) localStorage.setItem('kasir_customer', JSON.stringify(window.dataCustomer));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  muatDataPenyimpanan();
+  if (window.dataProduk) {
+    allData = window.dataProduk;
+  }
+});   
 window.addToCart=function(id){
   const prod=allData.find(d=>d.__backendId===id);if(!prod)return;
   const existing=cart.find(c=>c.id===id);
   if(existing){if(existing.qty<Number(prod.stock))existing.qty++}
   else cart.push({id,name:prod.name,price:Number(prod.price),qty:1,priceType:'normal'});
   renderCart();
+  simpanKeLocalStorage();
 };
 window.updateCartQty=function(id,delta){const item=cart.find(c=>c.id===id);if(!item)return;item.qty+=delta;if(item.qty<=0)cart=cart.filter(c=>c.id!==id);renderCart()};
 window.removeFromCart=function(id){cart=cart.filter(c=>c.id!==id);renderCart()};
