@@ -824,20 +824,49 @@ function showMainApp(){
   document.body.classList.toggle('cashier-safe',!isAdmin());
   buildNav();navigate('beranda');
 }
-
-document.getElementById('btn-logout').addEventListener('click',()=>{
-  const hasTodayDeposit=getByType('shift_deposit').some(r=>String(r.shift_closed_at||'').startsWith(todayStr()));
-  if(!hasTodayDeposit){document.getElementById('closing-reminder-modal').classList.add('show');return}
-  addLog('Logout',currentUser);
+// Fungsi pembantu untuk proses logout
+function doLogout() {
+  addLog('Logout', currentUser);
   sessionStorage.removeItem('kasir_session');
-  currentUser=null;currentRole=null;cart=[];
+  currentUser = null;
+  currentRole = null;
+  cart = [];
   document.getElementById('main-app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
+}
+
+// Tombol Keluar / Logout
+document.getElementById('btn-logout').addEventListener('click', () => {
+  const hasTodayDeposit = getByType('shift_deposit').some(r => String(r.shift_closed_at || '').startsWith(todayStr()));
+  if (!hasTodayDeposit) {
+    // Munculkan popup peringatan jika belum simpan setoran
+    document.getElementById('closing-reminder-modal').classList.add('show');
+    return;
+  }
+  doLogout();
 });
 
-document.getElementById('closing-reminder-ok').addEventListener('click',()=>{document.getElementById('closing-reminder-modal').classList.remove('show');navigate('setoran')});
-document.getElementById('closing-reminder-close').addEventListener('click',()=>{safeSave('kasir_shift_draft',{opening:document.getElementById('shift-opening').value,modal:document.getElementById('shift-modal').value,expense:document.getElementById('shift-expense').value,profit:document.getElementById('shift-profit').value,physical:document.getElementById('shift-physical').value,notes:document.getElementById('shift-notes').value});document.getElementById('closing-reminder-modal').classList.remove('show')});
+// Tombol OKE pada modal -> Pindah ke menu setoran
+document.getElementById('closing-reminder-ok').addEventListener('click', () => {
+  document.getElementById('closing-reminder-modal').classList.remove('show');
+  navigate('setoran');
+});
 
+// Tombol TUTUP pada modal -> Tetap simpan draft DAN izinkan keluar/ganti role
+document.getElementById('closing-reminder-close').addEventListener('click', () => {
+  safeSave('kasir_shift_draft', {
+    opening: document.getElementById('shift-opening')?.value || '',
+    modal: document.getElementById('shift-modal')?.value || '',
+    expense: document.getElementById('shift-expense')?.value || '',
+    profit: document.getElementById('shift-profit')?.value || '',
+    physical: document.getElementById('shift-physical')?.value || '',
+    notes: document.getElementById('shift-notes')?.value || ''
+  });
+  document.getElementById('closing-reminder-modal').classList.remove('show');
+  
+  // Memungkinkan aplikasi ditutup/logout meskipun setoran belum disimpan
+  doLogout();
+});
 // ============ NAVIGATION ============
 function navigate(page){
   if((page==='laporan'||page==='laporan-keuangan')&&!isAdmin()){showToast('Akses ditolak','error');return}
@@ -1687,14 +1716,31 @@ function renderShiftSummary(){const panel=document.getElementById('shift-summary
 function initShiftSummary(){const year=document.getElementById('shift-summary-year'),current=new Date().getFullYear();year.innerHTML=Array.from({length:7},(_,i)=>`<option value="${current-3+i}">${current-3+i}</option>`).join('');year.value=current;document.getElementById('shift-summary-month').value='all';document.getElementById('shift-summary-month').addEventListener('change',renderShiftSummary);year.addEventListener('change',()=>{renderShiftSummary();syncShiftSummaryToHistory()});document.querySelectorAll('.summary-preset').forEach(b=>b.addEventListener('click',()=>{const now=new Date();if(b.dataset.summaryPreset==='month'){year.value=now.getFullYear();document.getElementById('shift-summary-month').value=now.getMonth()+1}if(b.dataset.summaryPreset==='year'){year.value=now.getFullYear();document.getElementById('shift-summary-month').value='all'}if(b.dataset.summaryPreset==='all'){document.getElementById('shift-summary-month').value='all';year.value='all'}renderShiftSummary();syncShiftSummaryToHistory()}));document.getElementById('shift-summary-csv').addEventListener('click',()=>{const period=document.getElementById('shift-summary-period').textContent;const text='Periode,Grand Total,Modal,Potongan Biaya,Profit,Selisih,Kerugian\\n'+period+','+['opening_cash','shift_modal','deposit_expense','shift_profit','cash_difference'].map(k=>getByType('shift_deposit').reduce((s,r)=>s+Number(r[k]||0),0)).join(',');downloadBlob(new Blob(['\\ufeff'+text],{type:'text/csv'}),'Rangkuman-Setoran.csv')});document.getElementById('shift-summary-pdf').addEventListener('click',()=>window.print());renderShiftSummary()}
 // ============ SETORAN ============
 function getTodayShiftTotals(){
-  const today=todayStr();
-  const txs=getTransactions().filter(t=>t.transaction_status==='selesai'&&t.transaction_date&&t.transaction_date.startsWith(today));
-  let grandTotal=0,modal=0;
-  txs.forEach(t=>{
-    grandTotal+=Number(t.transaction_total||0);
-    try{JSON.parse(t.transaction_items||'[]').forEach(item=>{modal+=Number(item.hpp_snapshot||0)*Number(item.qty||0)})}catch(e){}
+  const deposits = getByType('shift_deposit');
+  
+  // Ambil waktu/timestamp saat tombol 'Simpan Setoran' terakhir kali diklik
+  const lastDeposit = deposits.length > 0 ? deposits[deposits.length - 1] : null;
+  const lastDepositTime = lastDeposit && lastDeposit.shift_closed_at ? new Date(lastDeposit.shift_closed_at).getTime() : 0;
+
+  // Hitung SEMUA transaksi selesai yang terjadi SETELAH simpan setoran terakhir
+  // (Jika belum pernah disimpan dari kemarin/lalu, otomatis transaksi akan terus terkumpul di sini)
+  const txs = getTransactions().filter(t => {
+    if (t.transaction_status !== 'selesai') return false;
+    const txTime = t.transaction_date ? new Date(t.transaction_date).getTime() : 0;
+    return txTime > lastDepositTime;
   });
-  return {grandTotal,modal};
+
+  let grandTotal = 0, modal = 0;
+  txs.forEach(t => {
+    grandTotal += Number(t.transaction_total || 0);
+    try {
+      JSON.parse(t.transaction_items || '[]').forEach(item => {
+        modal += Number(item.hpp_snapshot || 0) * Number(item.qty || 0);
+      });
+    } catch(e) {}
+  });
+
+  return { grandTotal, modal };
 }
 function updateShiftTotals(){
   const {grandTotal,modal}=getTodayShiftTotals();
