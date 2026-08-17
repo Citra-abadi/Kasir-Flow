@@ -32,6 +32,59 @@ button:active:not(:disabled){transform:translateY(1px)}
 .shift-history-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;background:#fff}.shift-history-table th,.shift-history-table td{border:1px solid #e2e8f0;padding:8px 6px;text-align:center;vertical-align:middle}.shift-history-table th{font-weight:500;color:#334155;background:#f8fafc;white-space:nowrap}.shift-history-table td{color:#0f172a;font-variant-numeric:tabular-nums}.shift-history-table .shift-notes{white-space:normal;overflow-wrap:anywhere}.shift-history-wrap{overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;background:#fff}@media(max-width:900px){.shift-history-table{min-width:760px}}
 .pos-thumb{width:100%;height:120px;object-fit:contain;border-radius:10px 10px 0 0;background:#fff;border-bottom:1px solid #e2e8f0;padding:8px}.image-fallback{background:linear-gradient(135deg,#f1f5f9,#e2e8f0);position:relative}.image-fallback::after{content:'Foto tidak tersedia';color:#94a3b8;font-size:10px;position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 @media print{body *{visibility:hidden!important}body.print-receipt{background:#fff!important;color:#111!important}body.print-receipt #print-modal,body.print-receipt #print-modal *{visibility:hidden!important}body.print-receipt #print-modal{display:block!important;position:absolute!important;inset:0!important;width:100%!important;background:#fff!important;overflow:visible!important}body.print-receipt #print-modal>div,body.print-receipt #print-modal .modal-content{display:block!important;position:static!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border-radius:0!important;background:#fff!important}body.print-receipt #print-preview,body.print-receipt #print-preview *{visibility:visible!important}body.print-receipt #print-modal>div>*:not(#print-preview),body.print-receipt #print-modal .modal-content>*:not(#print-preview){display:none!important;visibility:hidden!important}body.print-receipt #print-preview{display:block!important;position:absolute!important;top:0!important;left:0!important;max-height:none!important;overflow:visible!important;border:0!important;padding:0!important;width:100%!important;color:#111!important;background:#fff!important;box-shadow:none!important}.print-receipt #print-modal button,.print-receipt #print-modal select,.print-receipt #print-modal .btn{display:none!important}.receipt{display:block!important;visibility:visible!important;background:#fff!important;color:#111!important;margin:0!important;max-width:100%!important;width:100%!important;box-shadow:none!important}@page{margin:12mm;size:auto}}
+    /* ==========================================
+   STYLING LAYOUT CETAK DAN PREVIEW
+   ========================================== */
+
+/* Template Struk Thermal (58mm & 80mm) */
+.receipt-thermal {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #000;
+  margin: 0 auto;
+}
+.receipt-58mm { width: 58mm; max-width: 100%; }
+.receipt-80mm { width: 80mm; max-width: 100%; }
+
+/* Template Invoice A5 Modern */
+.receipt-invoice {
+  width: 100%;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #1e293b;
+  border: 2px double #334155;
+  padding: 16px;
+  background: #fff;
+}
+
+/* Template Tabel Nota / A4 / F4 Modern Grid */
+.receipt-table-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  background: #fff;
+}
+.receipt-table-grid th, .receipt-table-grid td {
+  border: 1px solid #000;
+  padding: 4px 6px;
+}
+
+/* Pengaturan Kertas Saat Di-Print Native */
+@media print {
+  body * { visibility: hidden !important; }
+  #print-preview, #print-preview * { visibility: visible !important; }
+  #print-preview {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  @page { margin: 0; }
+}
 </style>
   <script src="/_sdk/eba18683f23e5798.resizing_sdk.js" defer="" integrity="sha512-E0UWUllhwPXaNJtjyTKXWKrIE+FruPfFpO4mRmMDP2LI+U9bOizy5npCq6xx/JyWcvSK7D3TFf2wFR2Mha9kbA=="></script>
  <script src="/_sdk/0e8d3a91e1c6f495.data_sdk.js" integrity="sha512-c00oDoGjsMgluCLLEyVl3suwEkgjOGGplVFbsilUoBg4aMKNmsL3mwsc9r0dPn95qiSZyjBousQXgROkAW7p/w=="></script></head>
@@ -2052,6 +2105,177 @@ async function initApp(){
   initShiftSummary();
 }
 initApp();
+  // ==========================================
+// GENERATOR NOTA DINAMIS SESUAI DROPDOWN
+// ==========================================
+function generateReceiptContent(transactionData, formatType) {
+  const storeName = localStorage.getItem('store_name') || 'CITRA ABADI';
+  const storeAddress = localStorage.getItem('store_address') || 'Jl. Brambang Noreh sreseh sampang 69273';
+  const storePhone = localStorage.getItem('store_phone') || '081359431810';
+  
+  const items = Array.isArray(transactionData.items) ? transactionData.items : JSON.parse(transactionData.transaction_items || '[]');
+  const grandTotal = transactionData.transaction_total || 0;
+  const customerName = transactionData.customer_name || 'Pelanggan Umum';
+
+  // 1. STRUK THERMAL (58mm & 80mm) -> Gambar 4
+  if (formatType === 'Struk 58mm' || formatType === 'Struk 80mm') {
+    const is58 = formatType === 'Struk 58mm';
+    let itemRows = items.map(item => `
+      <div style="display:flex; justify-content:space-between; margin-top:2px;">
+        <span style="flex:1;">${item.name || item.product_name}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between;">
+        <span>${item.qty} x ${Number(item.price || item.sell_price).toLocaleString('id-ID')}</span>
+        <span>${(item.qty * (item.price || item.sell_price)).toLocaleString('id-ID')}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="receipt-thermal ${is58 ? 'receipt-58mm' : 'receipt-80mm'}">
+        <div style="text-align:center; font-weight:bold; font-size:13px;">${storeName}</div>
+        <div style="text-align:center; font-size:10px;">${storeAddress}</div>
+        <div style="text-align:center; font-size:10px;">Telp: ${storePhone}</div>
+        <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+        <div>No: ${transactionData.transaction_code || '-'}</div>
+        <div>Tgl: ${new Date().toLocaleString('id-ID')}</div>
+        <div>Cust: ${customerName}</div>
+        <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+        ${itemRows}
+        <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+        <div style="display:flex; justify-content:space-between; font-weight:bold;">
+          <span>TOTAL:</span>
+          <span>Rp ${Number(grandTotal).toLocaleString('id-ID')}</span>
+        </div>
+        <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+        <div style="text-align:center; margin-top:8px;">TERIMA KASIH<br>SELAMAT BELANJA KEMBALI</div>
+      </div>
+    `;
+  }
+
+  // 2. INVOICE A5 -> Gambar 3
+  if (formatType === 'Invoice A5' || formatType === 'Invoice') {
+    let itemRows = items.map(item => `
+      <tr>
+        <td style="padding:6px; border-bottom:1px solid #e2e8f0;">${item.name || item.product_name}</td>
+        <td style="padding:6px; text-align:center; border-bottom:1px solid #e2e8f0;">${item.qty}</td>
+        <td style="padding:6px; text-align:right; border-bottom:1px solid #e2e8f0;">${Number(item.price || item.sell_price).toLocaleString('id-ID')}</td>
+        <td style="padding:6px; text-align:right; border-bottom:1px solid #e2e8f0;">${(item.qty * (item.price || item.sell_price)).toLocaleString('id-ID')}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <div class="receipt-invoice">
+        <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:8px;">
+          <div>
+            <h2 style="font-size:20px; font-weight:bold; margin:0;">${storeName}</h2>
+            <div style="font-size:11px;">${storeAddress}</div>
+            <div style="font-size:11px;">Phone: ${storePhone}</div>
+          </div>
+          <div style="text-align:right;">
+            <h2 style="font-size:22px; font-weight:bold; margin:0;">INVOICE</h2>
+            <div style="font-size:12px;">No: ${transactionData.transaction_code || '-'}</div>
+            <div style="font-size:12px;">Tanggal: ${new Date().toLocaleDateString('id-ID')}</div>
+          </div>
+        </div>
+        <div style="margin: 12px 0;">
+          <strong>CUSTOMER:</strong> ${customerName}
+        </div>
+        <table style="width:100%; border-collapse:collapse; margin-top:8px;">
+          <thead>
+            <tr style="border-bottom:2px solid #000; background:#f8fafc;">
+              <th style="text-align:left; padding:6px;">Product Name</th>
+              <th style="text-align:center; padding:6px;">Qty</th>
+              <th style="text-align:right; padding:6px;">Unit Price</th>
+              <th style="text-align:right; padding:6px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div style="display:flex; justify-content:space-between; margin-top:20px;">
+          <div>
+            <p style="font-size:10px; font-style:italic;">* Terima kasih telah berbelanja bersama kami.</p>
+          </div>
+          <div style="text-align:right; font-size:14px; font-weight:bold;">
+            Total Price: Rp ${Number(grandTotal).toLocaleString('id-ID')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 3. A4 / F4 (TABEL GRID KHUSUS) -> Gambar 5
+  let gridRows = items.map((item, idx) => `
+    <tr>
+      <td style="text-align:center;">${idx + 1}</td>
+      <td>${item.name || item.product_name}</td>
+      <td style="text-align:right;">Rp ${Number(item.price || item.sell_price).toLocaleString('id-ID')}</td>
+      <td style="text-align:center;">${item.qty}</td>
+      <td style="text-align:right;">Rp ${(item.qty * (item.price || item.sell_price)).toLocaleString('id-ID')}</td>
+    </tr>
+  `).join('');
+
+  for (let i = items.length + 1; i <= 15; i++) {
+    gridRows += `<tr><td style="text-align:center;">${i}</td><td></td><td></td><td></td><td></td></tr>`;
+  }
+
+  return `
+    <div style="width:100%; background:#fff; padding:10px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <div>
+          <h1 style="font-size:22px; font-weight:bold; margin:0;">${storeName}</h1>
+          <div style="font-size:11px;">${storeAddress}</div>
+        </div>
+        <div style="text-align:right; font-size:12px;">
+          <div>Tanggal : ${new Date().toLocaleDateString('id-ID')}</div>
+          <div>Kepada Yth. : ${customerName}</div>
+          <div>No. Nota : ${transactionData.transaction_code || '-'}</div>
+        </div>
+      </div>
+      <table class="receipt-table-grid">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="width:5%;">No</th>
+            <th style="width:45%;">Nama Barang</th>
+            <th style="width:20%;">Harga Satuan</th>
+            <th style="width:10%;">Banyaknya</th>
+            <th style="width:20%;">jumlah</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${gridRows}
+          <tr>
+            <td colspan="4" style="text-align:right; font-weight:bold;">Total:</td>
+            <td style="text-align:right; font-weight:bold;">Rp ${Number(grandTotal).toLocaleString('id-ID')}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="display:flex; justify-content:space-between; margin-top:12px; font-size:11px;">
+        <div>Barang yang telah dibeli tidak dapat dikembalikan, kecuali ada perjanjian.</div>
+        <div style="text-align:center; width:150px;">
+          Hormat Kami
+          <br><br><br>
+          (...................)
+        </div>
+      </div>
+    </div>
+  `;
+}
+    // Hubungkan Perubahan Dropdown Pilihan Format Nota
+const printFormatSelect = document.getElementById('print-format-select') || document.querySelector('select');
+
+if (printFormatSelect) {
+  printFormatSelect.addEventListener('change', function(e) {
+    const selectedFormat = e.target.value;
+    const previewContainer = document.getElementById('receipt-preview-container') || document.getElementById('print-preview');
+    
+    // Ambil data transaksi aktif saat ini
+    const lastTrx = getTransactions().slice(-1)[0] || {};
+
+    if (previewContainer) {
+      previewContainer.innerHTML = generateReceiptContent(lastTrx, selectedFormat);
+    }
+  });
+}
 </script>
  
 </body></html>
