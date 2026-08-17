@@ -5,6 +5,7 @@
   <title>Kasir Pro</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <style>
 *{font-family:'DM Sans',sans-serif;box-sizing:border-box}
@@ -504,18 +505,26 @@ button:active:not(:disabled){transform:translateY(1px)}
      </div>
     </form>
    </div>
-  </div><!-- Barcode Camera Modal -->
-  <div id="barcode-camera-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="barcode-camera-title">
-   <div class="bg-white rounded-xl p-5 w-full max-w-md mx-4">
+  </div><!-- Barcode Camera Modal Universal -->
+<div id="barcode-camera-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="barcode-camera-title">
+  <div class="bg-white rounded-xl p-5 w-full max-w-md mx-4">
     <div class="flex items-center justify-between mb-3">
-     <h3 id="barcode-camera-title" class="font-bold text-lg">Scan Barcode</h3><button id="barcode-camera-close" type="button" class="text-slate-500 hover:text-slate-800" aria-label="Tutup kamera"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+      <h3 id="barcode-camera-title" class="font-bold text-lg">Scan Barcode</h3>
+      <button id="barcode-camera-close" onclick="stopScanner()" type="button" class="text-slate-500 hover:text-slate-800">
+        <i data-lucide="x" style="width: 20px; height: 20px"></i>
+      </button>
     </div>
-    <div class="rounded-lg overflow-hidden bg-slate-900 aspect-video">
-     <video id="barcode-video" class="w-full h-full object-cover" autoplay="" muted="" playsinline=""></video>
-    </div>
-    <p id="barcode-camera-status" class="text-sm text-slate-500 mt-3">Arahkan kamera ke barcode.</p><button id="barcode-camera-stop" type="button" class="w-full mt-3 py-2.5 bg-slate-800 text-white rounded-lg font-medium">Tutup Kamera</button>
-   </div>
-  </div><!-- Category Modal -->
+    
+    <!-- Select Pilihan Kamera (HP/Laptop/Webcam/Scanner Kamera USB) -->
+    <select id="camera-select" class="mb-3 p-2 border border-slate-300 rounded-lg text-sm w-full hidden" onchange="switchCamera(this.value)"></select>
+    
+    <!-- Area Reader HTML5-QRCode -->
+    <div id="reader" class="overflow-hidden rounded-lg border border-slate-200" style="width: 100%; max-width: 500px; margin: auto;"></div>
+    
+    <p id="barcode-camera-status" class="text-sm text-slate-500 mt-3">Arahkan kamera ke barcode.</p>
+    <button id="barcode-camera-stop" onclick="stopScanner()" type="button" class="w-full mt-3 py-2.5 bg-slate-800 text-white rounded-lg font-medium">Tutup Kamera</button>
+  </div>
+</div><!-- Category Modal -->
   <div id="category-modal" class="modal-overlay">
    <div class="bg-white rounded-xl p-6 w-full max-w-sm mx-4">
     <h3 id="cat-modal-title" class="font-bold text-lg mb-4">Tambah Kategori</h3>
@@ -1154,17 +1163,13 @@ document.getElementById('product-form').addEventListener('submit',async function
   resetSubmit();
 });
 
-// ============ CAMERA BARCODE SCANNER ============
-let barcodeStream=null, barcodeDetector=null, barcodeScanTimer=null, barcodeScanTarget='pos';
-function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.12)}catch(e){}}
-function closeBarcodeCamera(){if(barcodeScanTimer)cancelAnimationFrame(barcodeScanTimer);barcodeScanTimer=null;if(barcodeStream){barcodeStream.getTracks().forEach(track=>track.stop());barcodeStream=null}barcodeDetector=null;const video=document.getElementById('barcode-video');if(video){video.pause();video.srcObject=null}document.getElementById('barcode-camera-modal').classList.remove('show')}
-function normalizeLookup(value){return String(value??'').trim().toLowerCase()}
-function findBarcode(code){const key=normalizeLookup(code);if(!key)return null;return getProducts().find(p=>normalizeLookup(p.barcode)===key||normalizeLookup(p.sku)===key)}
-function findProductByQuery(query){const key=normalizeLookup(query);if(!key)return null;return getProducts().find(p=>normalizeLookup(p.barcode)===key||normalizeLookup(p.sku)===key||normalizeLookup(p.name)===key)}
-function handleBarcode(code){const value=String(code||'').trim();if(!value)return;const p=findBarcode(value);if(!p){showToast('Produk dengan barcode '+value+' belum terdaftar!','error');return}beep();if(barcodeScanTarget==='pos'){addToCart(p.__backendId);closeBarcodeCamera()}else{document.getElementById('si-product').value=p.__backendId;document.getElementById('si-product-search').value=p.name;document.getElementById('si-price').value=p.buy_price||'';document.getElementById('si-product-results').classList.add('hidden');document.getElementById('si-qty').focus();closeBarcodeCamera()}}
-async function openBarcodeCamera(target){barcodeScanTarget=target;closeBarcodeCamera();const modal=document.getElementById('barcode-camera-modal'),video=document.getElementById('barcode-video'),status=document.getElementById('barcode-camera-status');modal.classList.add('show');status.textContent='Menghubungkan kamera...';try{if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('camera-unavailable');try{barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:'environment'}}})}catch(e){barcodeStream=await navigator.mediaDevices.getUserMedia({video:true})}video.srcObject=barcodeStream;await video.play();if(!('BarcodeDetector' in window)){status.textContent='Pemindai barcode tidak tersedia di browser ini. Gunakan input manual atau scanner fisik.';return}barcodeDetector=new BarcodeDetector({formats:['code_128','ean_13','ean_8','upc_a','upc_e','code_39','codabar','itf']});const scan=async()=>{if(!barcodeStream||video.readyState<2)return barcodeScanTimer=requestAnimationFrame(scan);try{const codes=await barcodeDetector.detect(video);if(codes.length){handleBarcode(codes[0].rawValue);return}}catch(e){}barcodeScanTimer=requestAnimationFrame(scan)};scan()}catch(e){status.textContent='Izin kamera ditolak atau perangkat tidak mendukung. Silakan izinkan akses kamera di pengaturan browser Anda.';showToast(status.textContent,'error');setTimeout(closeBarcodeCamera,1800)}}
-document.getElementById('btn-pos-camera').addEventListener('click',()=>openBarcodeCamera('pos'));document.getElementById('btn-stock-camera').addEventListener('click',()=>openBarcodeCamera('stock'));document.getElementById('barcode-camera-close').addEventListener('click',closeBarcodeCamera);document.getElementById('barcode-camera-stop').addEventListener('click',closeBarcodeCamera);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')closeBarcodeCamera()});
-
+// =========== CAMERA BARCODE SCANNER (BARU) ===========
+document.addEventListener('DOMContentLoaded', () => {
+  const btnPosCamera = document.getElementById('btn-pos-camera');
+  if (btnPosCamera) {
+    btnPosCamera.addEventListener('click', () => startScanner('pos'));
+  }
+});
 // ============ POS / KASIR ============
 function getEffectivePrice(prod,qty,priceType){
   if(priceType==='diskon'&&prod.discount_type&&prod.discount_value){
@@ -1515,8 +1520,16 @@ document.getElementById('print-pdf').addEventListener('click',function(e){
   const originalLabel=button.textContent;
   button.disabled=true;button.textContent='Menyiapkan...';
   try{
-    updatePrintPreview();
-    printActiveReceipt();
+    const formatSelect = document.getElementById('print-format-select') || document.querySelector('select');
+const selectedFormat = formatSelect ? formatSelect.value : 'Struk 58mm';
+const lastTrx = window.lastCompletedTransaction || (typeof getTransactions === 'function' ? getTransactions().slice(-1)[0] : {}) || {};
+
+let printPreviewEl = document.getElementById('print-preview');
+if (printPreviewEl) {
+  printPreviewEl.innerHTML = generateReceiptContent(lastTrx, selectedFormat);
+}
+
+window.print();
   }catch(e){
     showToast('Gagal menyiapkan PDF. Gunakan Print Sekarang lalu pilih Simpan sebagai PDF.','error');
   }finally{
@@ -2276,6 +2289,99 @@ if (printFormatSelect) {
     }
   });
 }
-</script>
+    let html5QrCode = null;
+let currentCameraId = null;
+
+async function startScanner() {
+  const modal = document.getElementById('barcode-camera-modal');
+  if (modal) modal.classList.add('show'); // Membuka modal scanner
+
+  if (!html5QrCode) {
+    html5QrCode = new Html5Qrcode("reader");
+  }
+
+  try {
+    // Ambil daftar kamera yang tersedia di HP / Laptop / PC
+    const devices = await Html5Qrcode.getCameras();
+    const selectEl = document.getElementById('camera-select');
+
+    if (devices && devices.length > 0) {
+      // Tampilkan pilihan jika kamera lebih dari 1
+      if (devices.length > 1 && selectEl) {
+        selectEl.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Kamera ' + d.id}</option>`).join('');
+        selectEl.classList.remove('hidden');
+      }
+
+      // Utamakan kamera belakang jika ada
+      const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('belakang'));
+      currentCameraId = backCamera ? backCamera.id : devices[0].id;
+
+      runScanner(currentCameraId);
+    } else {
+      if (typeof showToast === 'function') showToast('Tidak ada kamera terdeteksi.', 'error');
+    }
+  } catch (err) {
+    console.error("Gagal mendeteksi kamera:", err);
+    runScanner({ facingMode: "environment" });
+  }
+}
+
+function runScanner(cameraIdOrConfig) {
+  const config = { 
+    fps: 15, 
+    qrbox: { width: 250, height: 150 },
+    aspectRatio: 1.0
+  };
+
+  html5QrCode.start(
+    cameraIdOrConfig,
+    config,
+    (decodedText) => {
+      console.log("Barcode Terbaca:", decodedText);
+
+      // Mengisi otomatis ke input barcode yang sedang aktif
+      const activeInput = document.getElementById('prod-barcode') || 
+                          document.getElementById('stock-in-search') || 
+                          document.getElementById('pos-search');
+                          
+      if (activeInput) {
+        activeInput.value = decodedText;
+        activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      if (typeof showToast === 'function') showToast('Barcode berhasil dipindai: ' + decodedText, 'success');
+      stopScanner();
+    },
+    (errorMessage) => {
+      // Abaikan pencarian frame biasa
+    }
+  ).catch((err) => {
+    console.error("Gagal menjalankan kamera:", err);
+    if (typeof showToast === 'function') showToast('Izin kamera ditolak atau sedang digunakan.', 'error');
+  });
+}
+
+function switchCamera(deviceId) {
+  if (html5QrCode && html5QrCode.isScanning) {
+    html5QrCode.stop().then(() => {
+      runScanner(deviceId);
+    });
+  }
+}
+
+function stopScanner() {
+  const modal = document.getElementById('barcode-camera-modal');
+  if (modal) modal.classList.remove('show');
+
+  // Sembunyikan kembali dropdown pilihan kamera
+  const selectEl = document.getElementById('camera-select');
+  if (selectEl) selectEl.classList.add('hidden');
+
+  if (html5QrCode && html5QrCode.isScanning) {
+    html5QrCode.stop().then(() => {
+      html5QrCode.clear();
+    }).catch(err => console.error("Gagal menghentikan kamera:", err));
+  }
+}</script>
  
 </body></html>
