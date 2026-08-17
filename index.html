@@ -662,18 +662,56 @@ async function sdkCreate(record) {
   }
 } 
 
+// ============ DATA STORAGE LOKAL STABIL ============
+function getLocalData() {
+  const saved = localStorage.getItem('kasir_flow_data');
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  return null;
+}
+
+function saveLocalData() {
+  localStorage.setItem('kasir_flow_data', JSON.stringify(allData));
+}
+
+// Inisialisasi Data Saat Aplikasi Dibuka
+const storedData = getLocalData();
+if (storedData && Array.isArray(storedData) && storedData.length > 0) {
+  allData = storedData;
+}
+
+function failedResult() {
+  return { isOk: false, isError: true, error: new Error('Gagal menyimpan data') };
+}
+
+async function sdkCreate(record) {
+  try {
+    if (!record.__backendId) {
+      record.__backendId = 'id_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    }
+    allData.push(record);
+    saveLocalData();
+    if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
+    return { isOk: true, isError: false, data: record };
+  } catch (e) {
+    showToast('Gagal menyimpan data.', 'error');
+    return failedResult();
+  }
+}
+
 async function sdkUpdate(record) {
   try {
     const index = allData.findIndex(item => item.__backendId === record.__backendId);
     if (index !== -1) {
       allData[index] = { ...allData[index], ...record };
-      safeSave('kasir_local_data', allData);
+      saveLocalData();
       if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
       return { isOk: true, isError: false };
     }
     return failedResult();
   } catch (e) {
-    showToast('Gagal memperbarui data. Coba lagi.', 'error');
+    showToast('Gagal memperbarui data.', 'error');
     return failedResult();
   }
 }
@@ -681,18 +719,25 @@ async function sdkUpdate(record) {
 async function sdkDelete(record) {
   try {
     allData = allData.filter(item => item.__backendId !== record.__backendId);
-    safeSave('kasir_local_data', allData);
+    saveLocalData();
     if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
     return { isOk: true, isError: false };
   } catch (e) {
-    showToast('Gagal menghapus data. Coba lagi.', 'error');
+    showToast('Gagal menghapus data.', 'error');
     return failedResult();
   }
 }
 
-async function addLog(action, details='') {
-  if (allData.length >= 999) return;
-  await sdkCreate({ ...makeEmpty(), type: 'log', username: currentUser || '', role: currentRole || '', action, timestamp: nowISO(), details });
+async function addLog(action, details = '') {
+  await sdkCreate({
+    ...makeEmpty(),
+    type: 'log',
+    username: currentUser || '',
+    role: currentRole || '',
+    action,
+    timestamp: nowISO(),
+    details
+  });
 }
 // ============ AUTH ============
 const adminPages=[{id:'beranda',icon:'home',label:'Beranda'},{id:'customer',icon:'contact-round',label:'Data Customer'},{id:'kategori',icon:'tags',label:'Kategori'},{id:'produk',icon:'package',label:'Produk'},{id:'kasir',icon:'monitor',label:'Kasir'},{id:'riwayat',icon:'clock',label:'Riwayat'},{id:'barang-masuk',icon:'package-plus',label:'Barang Masuk'},{id:'stok-kritis',icon:'alert-triangle',label:'Stok Kosong'},{id:'laporan',icon:'bar-chart-2',label:'Laporan'},{id:'laporan-keuangan',icon:'trending-up',label:'Lap. Keuangan'},{id:'setoran',icon:'wallet',label:'Setoran'},{id:'akun',icon:'users',label:'Akun'},{id:'toko',icon:'store',label:'Toko'},{id:'log',icon:'file-text',label:'Log'}];
