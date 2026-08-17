@@ -1194,14 +1194,46 @@ function renderPOS(){
   filterPOS();renderCart();
 }
 function filterPOS(){
-  const q=document.getElementById('pos-search').value.toLowerCase();
-  const cat=document.getElementById('pos-category-filter').value;
-  let prods=getProducts().filter(p=>Number(p.stock)>0&&p.active!=='0');
-  if(q)prods=prods.filter(p=>p.name.toLowerCase().includes(q)||(p.barcode||'').toLowerCase().includes(q));
-  if(cat)prods=prods.filter(p=>p.category===cat);
-  // barcode exact match auto-add
-  const exact=findProductByQuery(q);if(q&&exact&&Number(exact.stock)>0&&exact.active!=='0'){addToCart(exact.__backendId);document.getElementById('pos-search').value='';prods=prods.filter(p=>p.__backendId!==exact.__backendId)}
-  document.getElementById('pos-products').innerHTML=prods.map(p=>`<button onclick="addToCart('${p.__backendId}')" class="bg-white rounded-xl border hover:border-blue-400 hover:shadow-md text-left transition-all overflow-hidden p-0"><div class="pos-thumb flex items-center justify-center bg-slate-50"><img src="${p.image_data||''}" alt="${p.name}" class="w-full h-full object-contain ${p.image_data?'':'image-fallback'}" onerror="this.removeAttribute('src');this.classList.add('image-fallback')"></div><div class="p-3"><p class="font-semibold text-sm truncate">${p.name}</p><p class="text-base font-bold text-blue-600 mt-1">${fmt(p.price)}</p><p class="text-xs text-slate-400">Stok: ${p.stock}</p></div></button>`).join('')||'<p class="text-slate-400 italic col-span-4 text-center py-8">Tidak ada produk</p>';
+  const q = document.getElementById('pos-search').value.toLowerCase();
+  const cat = document.getElementById('pos-category-filter').value.toLowerCase();
+
+  let prods = getProducts().filter(p => Number(p.stock) > 0 && p.active !== '0');
+
+  if(q){
+    prods = prods.filter(p => 
+      String(p.name || '').toLowerCase().includes(q) || 
+      String(p.barcode || '').toLowerCase().includes(q)
+    );
+  }
+
+  if(cat){
+    prods = prods.filter(p => 
+      String(p.category || '').toLowerCase() === cat
+    );
+  }
+
+  if (q && q.trim() !== "") {
+    const exact = findProductByQuery(q);
+    if (exact && Number(exact.stock) > 0 && exact.active !== '0') {
+      addToCart(exact.__backendId);
+      if (typeof beep === 'function') beep();
+      document.getElementById('pos-search').value = '';
+    }
+  }
+
+  document.getElementById('pos-products').innerHTML = prods.map(p => `
+    <button onclick="addToCart('${p.__backendId}')" class="bg-white rounded-xl border hover:border-blue-400 hover:shadow-md text-left transition-all overflow-hidden p-0">
+      <div class="pos-thumb flex items-center justify-center bg-slate-50">
+        <img src="${p.image_data || ''}" alt="${p.name}" class="w-full h-full object-contain ${p.image_data ? '' : 'image-fallback'}" onerror="this.removeAttribute('src');this.classList.add('image-fallback')">
+      </div>
+      <div class="p-3">
+        <p class="font-semibold text-sm truncate">${p.name}</p>
+        <p class="text-base font-bold text-blue-600 mt-1">${fmt(p.price)}</p>
+        <p class="text-xs text-slate-400">Stok: ${p.stock}</p>
+      </div>
+    </button>
+  `).join('') || '<p class="text-slate-400 italic col-span-4 text-center py-8">Tidak ada produk</p>';
+
   lucide.createIcons();
 }
 document.getElementById('pos-search').addEventListener('input',filterPOS);
@@ -2326,41 +2358,55 @@ async function startScanner() {
   }
 }
 
+    function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch (e) {
+    console.error("Audio error:", e);
+  }
+}
 function runScanner(cameraIdOrConfig) {
-  const config = { 
-    fps: 15, 
-    qrbox: { width: 250, height: 150 },
-    aspectRatio: 1.0
+  const config = {
+    fps: 20,
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      let minSize = Math.min(viewfinderWidth, viewfinderHeight);
+      let scanRegionSize = Math.floor(minSize * 0.6);
+      return { width: scanRegionSize, height: scanRegionSize };
+    },
+    aspectRatio: 1.0,
+    disableFlip: false
   };
 
-  html5QrCode.start(
-    cameraIdOrConfig,
-    config,
-    (decodedText) => {
-      console.log("Barcode Terbaca:", decodedText);
+  html5QrCode.start(cameraIdOrConfig, config, (decodedText) => {
+    if (typeof beep === 'function') beep();
 
-      // Mengisi otomatis ke input barcode yang sedang aktif
-      const activeInput = document.getElementById('prod-barcode') || 
-                          document.getElementById('stock-in-search') || 
-                          document.getElementById('pos-search');
-                          
-      if (activeInput) {
-        activeInput.value = decodedText;
-        activeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-
-      if (typeof showToast === 'function') showToast('Barcode berhasil dipindai: ' + decodedText, 'success');
-      stopScanner();
-    },
-    (errorMessage) => {
-      // Abaikan pencarian frame biasa
+    const activeInput = document.getElementById('pos-search') || 
+                        document.getElementById('prod-barcode') || 
+                        document.getElementById('stock-in-search');
+    
+    if (activeInput) {
+      activeInput.value = decodedText;
+      activeInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
-  ).catch((err) => {
+    
+    if (typeof showToast === 'function') showToast('Barcode berhasil dipindai: ' + decodedText, 'success');
+    
+    stopScanner();
+  }, (errorMessage) => {
+    // abaikan error frame
+  }).catch((err) => {
     console.error("Gagal menjalankan kamera:", err);
-    if (typeof showToast === 'function') showToast('Izin kamera ditolak atau sedang digunakan.', 'error');
   });
 }
-
 function switchCamera(deviceId) {
   if (html5QrCode && html5QrCode.isScanning) {
     html5QrCode.stop().then(() => {
@@ -2382,6 +2428,47 @@ function stopScanner() {
       html5QrCode.clear();
     }).catch(err => console.error("Gagal menghentikan kamera:", err));
   }
-}</script>
+}
+// === PERBAIKAN PENYIMPANAN AKUN (USERS) PERMANEN ===
+function getUsers() {
+  const saved = localStorage.getItem('app_users');
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  const defaultUsers = [
+    { username: 'admin', role: 'admin', pass: 'admin' },
+    { username: 'kasir', role: 'kasir', pass: 'kasir' }
+  ];
+  localStorage.setItem('app_users', JSON.stringify(defaultUsers));
+  return defaultUsers;
+}
+
+function saveUsers(users) {
+  localStorage.setItem('app_users', JSON.stringify(users));
+}
+// === PERBAIKAN PENYIMPANAN LOGO & PROFIL TOKO PERMANEN ===
+function getStoreProfile() {
+  const saved = localStorage.getItem('app_store_profile');
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  return {
+    name: 'Kasir Pro',
+    address: 'sumur waru',
+    phone: '123456789012',
+    rekening: '12345678',
+    rekening_name: 'kelvin',
+    logo: ''
+  };
+}
+
+function saveStoreLogo(logoData) {
+  const store = getStoreProfile();
+  store.logo = logoData;
+  localStorage.setItem('app_store_profile', JSON.stringify(store));
+  if (typeof renderStoreSettings === 'function') renderStoreSettings();
+  if (typeof showToast === 'function') showToast('Logo toko berhasil disimpan!', 'success');
+}  
+  </script>
  
 </body></html>
