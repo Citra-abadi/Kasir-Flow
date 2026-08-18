@@ -2752,6 +2752,35 @@ function saveStoreLogo(logoData) {
   if (typeof renderStoreSettings === 'function') renderStoreSettings();
   if (typeof showToast === 'function') showToast('Logo toko berhasil disimpan!', 'success');
 }
+// === SINKRONISASI STOK PRODUK KETIKA TRANSAKSI ===
+function processTransaction(cartItems) {
+  let products = JSON.parse(localStorage.getItem('app_products') || '[]');
+  
+  // Potong stok produk di keranjang
+  cartItems.forEach(item => {
+    let prod = products.find(p => p.id === item.id || p.name === item.name);
+    if (prod) {
+      prod.stock = Math.max(0, (Number(prod.stock) || 0) - (Number(item.qty) || 1));
+    }
+  });
+
+  // Simpan stok terbaru ke localStorage
+  localStorage.setItem('app_products', JSON.stringify(products));
+  
+  if (typeof renderProducts === 'function') renderProducts();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+// === MEMUAT PRODUK DARI LOCALSTORAGE ===
+function getProducts() {
+  const saved = localStorage.getItem('app_products');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch(e) { console.error(e); }
+  }
+  return [];
+}
   </script>
  
 </body></html>
