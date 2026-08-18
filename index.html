@@ -1455,13 +1455,223 @@ function openPrintChoice(){
 }
 function closePrintChoice(){document.getElementById('print-modal').classList.remove('show')}
 document.getElementById('print-modal').addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();closePrintChoice();}if(e.key==='Enter'&&e.target.tagName==='BUTTON'){e.preventDefault();e.target.click();}});
-function receiptMarkup(tx,format){
-  const thermal=format==='thermal58'||format==='thermal80';
-  const large=['invoice','a4','f4','custom'].includes(format);
-  const storeDetails='<p>'+(branding.address||'[ Alamat belum diisi ]')+'</p><p>'+(branding.phone||'[ Nomor HP belum diisi ]')+'</p>'+(thermal?'':'<p>Rekening: '+(branding.bank||'[ No. rekening belum diisi ]')+' · '+(branding.account||'[ Nama rekening belum diisi ]')+'</p>');
-  const rows=tx.items.map((i,index)=>'<tr><td>'+(index+1)+'</td><td>'+i.name+'</td><td class="num">'+fmt(i.price)+'</td><td class="qty">'+i.qty+'</td><td class="num">'+fmt(i.subtotal)+'</td></tr>').join('');
-  const words='Terbilang: '+numberToWords(tx.total)+' Rupiah';
-  return '<article class="receipt '+(large?'large':'thermal')+' '+format+'"><header><h1>'+branding.name+'</h1>'+storeDetails+'<p>'+new Date(tx.date).toLocaleString('id-ID')+'</p>'+(large?'<p>Kepada Yth: '+tx.customer+'</p><p>'+(tx.address?'Alamat: '+tx.address:'')+(tx.phone?' · HP: '+tx.phone:'')+'</p><p>No. Nota: '+tx.id+'</p>':'<p>'+tx.id+' · '+tx.customer+'</p>')+'</header><table><thead><tr><th>No</th><th>Nama Barang</th><th>Harga Satuan</th><th>Banyaknya</th><th>Jumlah</th></tr></thead><tbody>'+rows+'</tbody></table><p class="words">'+words+'</p><p class="total">Total Rp: '+fmt(tx.total)+'</p><p>Catatan Garansi: Barang yang sudah dibeli tidak dapat dikembalikan kecuali sesuai kebijakan toko.</p>'+(large?'<p class="sign">Hormat Kami</p>':'<p class="thanks">Terima kasih</p>')+'</article>';
+function receiptMarkup(tx, format) {
+  tx = tx || {};
+  const items = tx.items || [];
+  
+ // Mengambil data profil toko dinamis (Mencakup penanganan data branding & store_profile)
+  const store = JSON.parse(localStorage.getItem('store_profile') || localStorage.getItem('branding') || '{}');
+  const storeName = store.name || store.storeName || 'CITRA ABADI';
+  const storeAddress = store.address || 'Jl. Brambang Noreh sreseh sampang 69273';
+  const storePhone = store.phone || store.storePhone || '081359431810';
+  const bankName = store.bankName || 'Bank BRI';
+  const bankNo = store.bankNo || store.accountNo || store.rekening || '7124 0103 6605 530';
+  const bankAccount = store.bankAccount || store.accountName || store.namaRekening || 'NEZEM RAFLI';
+  
+  const dateStr = tx.date ? new Date(tx.date).toLocaleDateString('id-ID') : new Date().toLocaleDateString('id-ID');
+  const invoiceNo = tx.id || 'INV-' + Date.now();
+  const customerName = tx.customerName || 'Pelanggan Umum';
+  const customerAddress = tx.customerAddress || '-';
+  const customerPhone = tx.customerPhone || '-';
+  const salesman = tx.salesman || 'Kasir';
+  const paymentMethod = tx.paymentMethod || 'Tunai';
+
+  const total = tx.total || items.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 1)), 0);
+  const pay = tx.pay || total;
+  const change = tx.change || (pay - total);
+
+  // 1. INVOICE / PDF (Layout Gambar 1)
+  if (format === 'Invoice' || format === 'PDF' || format === 'invoice') {
+    let rowsHtml = items.map(i => `
+      <tr style="border-bottom: 1px solid #ddd;">
+        <td style="padding: 6px 0;">${i.name}</td>
+        <td style="text-align: center; padding: 6px 0;">${i.qty}</td>
+        <td style="text-align: right; padding: 6px 0;">${(i.price||0).toLocaleString('id-ID')}</td>
+        <td style="text-align: right; padding: 6px 0;">${((i.price||0)*(i.qty||1)).toLocaleString('id-ID')}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <div style="font-family: serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 2px double #000; box-sizing: border-box; background: #fff; color: #000;">
+        <h2 style="text-align: center; margin: 0; font-size: 24px; letter-spacing: 2px;">INVOICE</h2>
+        <p style="text-align: center; margin: 2px 0 15px 0; font-size: 13px;">${invoiceNo}</p>
+        
+        <table style="width: 100%; margin-bottom: 10px; font-size: 13px;">
+          <tr>
+            <td style="vertical-align: top; width: 55%;">
+              <strong style="font-size: 18px;">${storeName}</strong><br/>
+              ${storeAddress}<br/>
+              Phone: ${storePhone}
+            </td>
+            <td style="vertical-align: top; text-align: right;">
+              Salesman : ${salesman}<br/>
+              inv Date : ${dateStr}<br/>
+              Payment Method : ${paymentMethod}
+            </td>
+          </tr>
+        </table>
+        
+        <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 6px 0; margin-bottom: 15px; font-size: 13px;">
+          <strong>CUSTOMER:</strong> ${customerName} &nbsp;&nbsp; ${customerAddress} &nbsp;&nbsp; Phone: ${customerPhone}
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #000; text-align: left;">
+              <th>Product Name</th>
+              <th style="text-align: center;">Qty</th>
+              <th style="text-align: right;">Unit Price</th>
+              <th style="text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+
+        <table style="width: 100%; margin-top: 20px; font-size: 13px;">
+          <tr>
+            <td style="vertical-align: top; width: 60%;">
+              <strong>Bank Transfer</strong><br/>
+              ${bankName}<br/>
+              <strong>${bankNo}</strong><br/>
+              Account Name : ${bankAccount}<br/><br/>
+              <em style="font-size: 11px;">*Please confirm your payment after transfer<br/>— Thank you for shopping with us! —</em>
+            </td>
+            <td style="vertical-align: top; text-align: right;">
+              <table style="width: 100%; font-size: 13px;">
+                <tr><td>Subtotal</td><td style="text-align: right;">${total.toLocaleString('id-ID')}</td></tr>
+                <tr><td>Tax</td><td style="text-align: right;">0</td></tr>
+                <tr style="font-weight: bold; font-size: 15px; border-top: 1px solid #000;">
+                  <td style="padding-top: 5px;">Total Price</td>
+                  <td style="text-align: right; padding-top: 5px;">${total.toLocaleString('id-ID')}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
+
+  // 2. STRUK THERMAL 58mm / 80mm
+  else if (format === 'Struk 58mm' || format === 'Struk 80mm' || format === 'thermal58' || format === 'thermal80') {
+    const is80 = format === 'Struk 80mm' || format === 'thermal80';
+    const width = is80 ? '78mm' : '56mm';
+    
+    let itemsHtml = items.map(i => `
+      <div style="display: flex; justify-content: space-between;">
+        <span>${i.name}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+        <span>${i.qty} x ${i.price.toLocaleString('id-ID')}</span>
+        <span>${((i.price||0)*(i.qty||1)).toLocaleString('id-ID')}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div style="width: ${width}; font-family: monospace; font-size: 11px; margin: 0 auto; padding: 5px; background: #fff; color: #000;">
+        <div style="text-align: center; font-weight: bold; font-size: 13px;">${storeName}</div>
+        <div style="text-align: center;">${storeAddress}</div>
+        <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+        <div>Tgl: ${dateStr}</div>
+        <div>No : ${invoiceNo}</div>
+        <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+        ${itemsHtml}
+        <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+          <span>TOTAL</span>
+          <span>${total.toLocaleString('id-ID')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>TUNAI</span>
+          <span>${pay.toLocaleString('id-ID')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>KEMBALI</span>
+          <span>${change.toLocaleString('id-ID')}</span>
+        </div>
+        <div style="border-bottom: 1px dashed #000; margin: 5px 0;"></div>
+        <div style="text-align: center; margin-top: 8px;">TERIMA KASIH<br/>SELAMAT BELANJA KEMBALI</div>
+      </div>
+    `;
+  }
+
+  // 3. NOTA TABEL A4 / F4 / CUSTOM (Layout Gambar 3)
+  else {
+    let tableRows = '';
+    const maxRows = 25;
+    for (let i = 0; i < maxRows; i++) {
+      const item = items[i];
+      if (item) {
+        tableRows += `
+          <tr style="height: 22px;">
+            <td style="border: 1px solid #000; text-align: center;">${i + 1}</td>
+            <td style="border: 1px solid #000; padding-left: 4px;">${item.name}</td>
+            <td style="border: 1px solid #000; padding-right: 4px; text-align: right;">Rp ${item.price.toLocaleString('id-ID')}</td>
+            <td style="border: 1px solid #000; text-align: center;">${item.qty}</td>
+            <td style="border: 1px solid #000; padding-right: 4px; text-align: right;">Rp ${((item.price||0)*(item.qty||1)).toLocaleString('id-ID')}</td>
+          </tr>
+        `;
+      } else {
+        tableRows += `
+          <tr style="height: 22px;">
+            <td style="border: 1px solid #000; text-align: center;">${i + 1}</td>
+            <td style="border: 1px solid #000;"></td>
+            <td style="border: 1px solid #000;"></td>
+            <td style="border: 1px solid #000;"></td>
+            <td style="border: 1px solid #000;"></td>
+          </tr>
+        `;
+      }
+    }
+
+    return `
+      <div style="font-family: Arial, sans-serif; font-size: 12px; width: 100%; max-width: 750px; margin: 0 auto; background: #fff; padding: 10px; color: #000;">
+        <table style="width: 100%; margin-bottom: 5px;">
+          <tr>
+            <td style="vertical-align: top;">
+              <h1 style="margin: 0; font-size: 22px; font-weight: bold;">${storeName}</h1>
+              <div style="font-size: 11px;">${storeAddress}</div>
+            </td>
+            <td style="vertical-align: top; text-align: right; font-size: 11px;">
+              Tanggal : ${dateStr}<br/>
+              Kepada Yth. : ${customerName}<br/><br/>
+              No.Nota : ${invoiceNo}
+            </td>
+          </tr>
+        </table>
+
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px;">
+          <thead>
+            <tr style="background: #f0f0f0;">
+              <th style="border: 1px solid #000; width: 35px; padding: 4px;">No</th>
+              <th style="border: 1px solid #000; padding: 4px;">Nama Barang</th>
+              <th style="border: 1px solid #000; width: 110px; padding: 4px;">Harga Satuan</th>
+              <th style="border: 1px solid #000; width: 70px; padding: 4px;">Banyaknya</th>
+              <th style="border: 1px solid #000; width: 110px; padding: 4px;">jumlah</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" style="border: 1px solid #000; text-align: right; padding: 4px; font-weight: bold;"></td>
+              <td style="border: 1px solid #000; text-align: right; padding: 4px; font-weight: bold;">Rp ${total.toLocaleString('id-ID')}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <table style="width: 100%; margin-top: 10px; font-size: 11px;">
+          <tr>
+            <td style="vertical-align: bottom; width: 60%;">
+              Barang yang telah dibeli tidak dapat di kembalikan, kecuali ada perjanjian
+            </td>
+            <td style="vertical-align: bottom; text-align: center;">
+              <strong>Hormat Kami</strong>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
 }
 function numberToWords(value){const n=Math.round(Number(value)||0);if(!n)return'nol';const ones=['','satu','dua','tiga','empat','lima','enam','tujuh','delapan','sembilan','sepuluh','sebelas'];function w(x){if(x<12)return ones[x];if(x<20)return w(x-10)+' belas';if(x<100)return w(Math.floor(x/10))+' puluh '+w(x%10);if(x<200)return' seratus '+w(x-100);if(x<1000)return w(Math.floor(x/100))+' ratus '+w(x%100);if(x<2000)return' seribu '+w(x-1000);if(x<1000000)return w(Math.floor(x/1000))+' ribu '+w(x%1000);return w(Math.floor(x/1000000))+' juta '+w(x%1000000)}return w(n).replace(/\\s+/g,' ').trim()}
 let printActionPending=false;
@@ -2478,8 +2688,17 @@ function stopScanner() {
 function getUsers() {
   const saved = localStorage.getItem('app_users');
   if (saved) {
-    try { return JSON.parse(saved); } catch(e) {}
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error("Gagal membaca data akun:", e);
+    }
   }
+  
+  // Hanya simpan default jika localStorage BENAR-BENAR KOSONG
   const defaultUsers = [
     { username: 'admin', role: 'admin', pass: 'admin' },
     { username: 'kasir', role: 'kasir', pass: 'kasir' }
@@ -2489,16 +2708,23 @@ function getUsers() {
 }
 
 function saveUsers(users) {
-  localStorage.setItem('app_users', JSON.stringify(users));
+  if (Array.isArray(users)) {
+    localStorage.setItem('app_users', JSON.stringify(users));
+  }
 }
 // === PERBAIKAN PENYIMPANAN LOGO & PROFIL TOKO PERMANEN ===
 function getStoreProfile() {
-  const saved = localStorage.getItem('app_store_profile');
+  const saved = localStorage.getItem('store_profile') || localStorage.getItem('app_store_profile') || localStorage.getItem('branding');
   if (saved) {
-    try { return JSON.parse(saved); } catch(e) {}
+    try {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed;
+      }
+    } catch(e) {}
   }
   return {
-    name: 'Kasir Pro',
+    name: 'Citra Abadi',
     address: 'sumur waru',
     phone: '123456789012',
     rekening: '12345678',
@@ -2510,10 +2736,22 @@ function getStoreProfile() {
 function saveStoreLogo(logoData) {
   const store = getStoreProfile();
   store.logo = logoData;
-  localStorage.setItem('app_store_profile', JSON.stringify(store));
+  
+  // Simpan ke semua Kunci Storage agar sinkron di seluruh aplikasi
+  const jsonString = JSON.stringify(store);
+  localStorage.setItem('store_profile', jsonString);
+  localStorage.setItem('app_store_profile', jsonString);
+  localStorage.setItem('branding', jsonString);
+
+  // Update tampilan elemen logo di halaman jika ada
+  const logoPreview = document.getElementById('store-logo-preview') || document.querySelector('.logo-preview img');
+  if (logoPreview) {
+    logoPreview.src = logoData;
+  }
+
   if (typeof renderStoreSettings === 'function') renderStoreSettings();
   if (typeof showToast === 'function') showToast('Logo toko berhasil disimpan!', 'success');
-}  
+}
   </script>
  
 </body></html>
