@@ -2771,15 +2771,43 @@ function processTransaction(cartItems) {
   if (typeof renderDashboard === 'function') renderDashboard();
 }
 
-// === MEMUAT PRODUK DARI LOCALSTORAGE ===
+// === MEMUAT PRODUK DENGAN DATA DEFAULT/BAWAAN ===
 function getProducts() {
   const saved = localStorage.getItem('app_products');
   if (saved) {
     try {
-      return JSON.parse(saved);
-    } catch(e) { console.error(e); }
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error("Gagal membaca produk:", e);
+    }
   }
-  return [];
+
+  // Jika localStorage kosong, gunakan produk default bawaan aplikasi
+  const defaultProducts = [
+    { id: 1, name: 'Produk A', price: 10000, stock: 50, category: 'Umum' },
+    { id: 2, name: 'Produk B', price: 15000, stock: 30, category: 'Umum' }
+  ];
+  localStorage.setItem('app_products', JSON.stringify(defaultProducts));
+  return defaultProducts;
+}
+
+// === SINKRONISASI STOK PRODUK KETIKA TRANSAKSI ===
+function processTransaction(cartItems) {
+  let products = getProducts();
+  
+  cartItems.forEach(item => {
+    let prod = products.find(p => p.id === item.id || p.name === item.name);
+    if (prod) {
+      prod.stock = Math.max(0, (Number(prod.stock) || 0) - (Number(item.qty) || 1));
+    }
+  });
+
+  localStorage.setItem('app_products', JSON.stringify(products));
+  if (typeof renderProducts === 'function') renderProducts();
+  if (typeof renderDashboard === 'function') renderDashboard();
 }
   </script>
  
