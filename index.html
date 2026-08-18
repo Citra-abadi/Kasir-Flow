@@ -32,10 +32,33 @@ button:active:not(:disabled){transform:translateY(1px)}
 .prod-thumb{width:48px;height:48px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #e2e8f0;padding:2px}
 .shift-history-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;background:#fff}.shift-history-table th,.shift-history-table td{border:1px solid #e2e8f0;padding:8px 6px;text-align:center;vertical-align:middle}.shift-history-table th{font-weight:500;color:#334155;background:#f8fafc;white-space:nowrap}.shift-history-table td{color:#0f172a;font-variant-numeric:tabular-nums}.shift-history-table .shift-notes{white-space:normal;overflow-wrap:anywhere}.shift-history-wrap{overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;background:#fff}@media(max-width:900px){.shift-history-table{min-width:760px}}
 .pos-thumb{width:100%;height:120px;object-fit:contain;border-radius:10px 10px 0 0;background:#fff;border-bottom:1px solid #e2e8f0;padding:8px}.image-fallback{background:linear-gradient(135deg,#f1f5f9,#e2e8f0);position:relative}.image-fallback::after{content:'Foto tidak tersedia';color:#94a3b8;font-size:10px;position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-@media print{body *{visibility:hidden!important}body.print-receipt{background:#fff!important;color:#111!important}body.print-receipt #print-modal,body.print-receipt #print-modal *{visibility:hidden!important}body.print-receipt #print-modal{display:block!important;position:absolute!important;inset:0!important;width:100%!important;background:#fff!important;overflow:visible!important}body.print-receipt #print-modal>div,body.print-receipt #print-modal .modal-content{display:block!important;position:static!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border-radius:0!important;background:#fff!important}body.print-receipt #print-preview,body.print-receipt #print-preview *{visibility:visible!important}body.print-receipt #print-modal>div>*:not(#print-preview),body.print-receipt #print-modal .modal-content>*:not(#print-preview){display:none!important;visibility:hidden!important}body.print-receipt #print-preview{display:block!important;position:absolute!important;top:0!important;left:0!important;max-height:none!important;overflow:visible!important;border:0!important;padding:0!important;width:100%!important;color:#111!important;background:#fff!important;box-shadow:none!important}.print-receipt #print-modal button,.print-receipt #print-modal select,.print-receipt #print-modal .btn{display:none!important}.receipt{display:block!important;visibility:visible!important;background:#fff!important;color:#111!important;margin:0!important;max-width:100%!important;width:100%!important;box-shadow:none!important}@page{margin:12mm;size:auto}}
-    /* ==========================================
-   STYLING LAYOUT CETAK DAN PREVIEW
-   ========================================== */
+@media print {
+  /* Sembunyikan seluruh elemen utama aplikasi */
+  body > * { 
+    display: none !important; 
+  }
+  
+  /* Tampilkan HANYA elemen preview cetak baru */
+  #print-preview, #print-preview * { 
+    display: block !important; 
+    visibility: visible !important; 
+  }
+  
+  #print-preview {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  
+  @page { 
+    margin: 0; 
+  }
+}
+    ========================================== */
 
 /* Template Struk Thermal (58mm & 80mm) */
 .receipt-thermal {
@@ -1557,11 +1580,17 @@ const selectedFormat = formatSelect ? formatSelect.value : 'Struk 58mm';
 const lastTrx = window.lastCompletedTransaction || (typeof getTransactions === 'function' ? getTransactions().slice(-1)[0] : {}) || {};
 
 let printPreviewEl = document.getElementById('print-preview');
-if (printPreviewEl) {
-  printPreviewEl.innerHTML = generateReceiptContent(lastTrx, selectedFormat);
-}
+    if (!printPreviewEl) {
+      printPreviewEl = document.createElement('div');
+      printPreviewEl.id = 'print-preview';
+    }
 
-window.print();
+    printPreviewEl.innerHTML = generateReceiptContent(lastTrx, selectedFormat);
+    
+    // TAMBAHKAN BARIS INI (Memindahkan elemen ke paling luar agar tidak tersembunyi):
+    document.body.appendChild(printPreviewEl);
+
+    window.print();
   }catch(e){
     showToast('Gagal menyiapkan PDF. Gunakan Print Sekarang lalu pilih Simpan sebagai PDF.','error');
   }finally{
@@ -1587,7 +1616,23 @@ document.getElementById('print-preview-btn').addEventListener('click',function()
   }catch(e){showToast('Gagal menyiapkan pratinjau nota. Coba lagi.','error')}
   finally{setTimeout(()=>{button.disabled=false;button.textContent=originalLabel},700)}
 });
-document.getElementById('print-yes').addEventListener('click',function(e){ e.preventDefault(); printActiveReceipt(); });
+document.getElementById('print-yes').addEventListener('click', function(e) {
+  e.preventDefault();
+  const formatSelect = document.getElementById('print-format-select') || document.querySelector('select');
+  const selectedFormat = formatSelect ? formatSelect.value : 'Struk 58mm';
+  const lastTrx = window.lastCompletedTransaction || (typeof getTransactions === 'function' ? getTransactions().slice(-1)[0] : {}) || {};
+
+  let printPreviewEl = document.getElementById('print-preview');
+  if (!printPreviewEl) {
+    printPreviewEl = document.createElement('div');
+    printPreviewEl.id = 'print-preview';
+  }
+
+  printPreviewEl.innerHTML = generateReceiptContent(lastTrx, selectedFormat);
+  document.body.appendChild(printPreviewEl);
+
+  window.print();
+});
 document.getElementById('print-xlsx').addEventListener('click',function(e){
   e.preventDefault();
   const button=this;if(button.disabled)return;
