@@ -224,8 +224,13 @@ button:active:not(:disabled){transform:translateY(1px)}
     <div id="page-kasir" class="page p-4">
      <div class="flex gap-4" style="height:calc(88 * min(var(--vh,1vh),1vh))">
       <div class="flex-1 flex flex-col">
-       <div class="mb-3 flex gap-2"><input id="pos-search" type="text" placeholder="Cari produk atau scan barcode..." class="flex-1 px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"><button id="btn-pos-camera" type="button" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" aria-label="Buka kamera barcode" title="Scan barcode dengan kamera"><i data-lucide="camera" style="width:18px;height:18px"></i></button><select id="pos-category-filter" class="px-3 py-2 border rounded-lg text-sm"><option value="">Semua</option></select>
-       </div>
+      <div class="mb-3 flex gap-2">
+  <input id="pos-search" type="text" placeholder="Cari produk atau scan barcode..." class="flex-1 px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+  <button type="button" id="btn-scan-pos" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1 text-sm font-medium">
+    <i data-lucide="qr-code" style="width:18px;height:18px"></i> Scan
+  </button>
+</div> 
+      </div>
        <div id="pos-products" tabindex="0" aria-label="Katalog produk" class="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 content-start"></div>
       </div>
       <div class="w-96 bg-white rounded-xl shadow-sm border flex flex-col">
@@ -2809,7 +2814,87 @@ function processTransaction(cartItems) {
   if (typeof renderProducts === 'function') renderProducts();
   if (typeof renderDashboard === 'function') renderDashboard();
 }
+    
+// === LOGIC SCANNER BARCODE ===
+let html5QrcodeScanner = null;
+
+function startScanner(onSuccessCallback) {
+  const modal = document.getElementById('scanner-modal');
+  if (modal) modal.classList.add('show');
+
+  if (!html5QrcodeScanner) {
+    html5QrcodeScanner = new Html5Qrcode("reader");
+  }
+
+  const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+
+  html5QrcodeScanner.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      stopScanner();
+      onSuccessCallback(decodedText);
+    },
+    (errorMessage) => { /* abaikan error per-frame */ }
+  ).catch(err => {
+    if (typeof showToast === 'function') showToast('Gagal membuka kamera: ' + err, 'error');
+    stopScanner();
+  });
+}
+
+function stopScanner() {
+  const modal = document.getElementById('scanner-modal');
+  if (modal) modal.classList.remove('show');
+  if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+    html5QrcodeScanner.stop().catch(err => console.error(err));
+  }
+}
+
+// Event listener tombol scan kasir
+document.getElementById('btn-scan-pos')?.addEventListener('click', () => {
+  startScanner((barcode) => {
+    let products = typeof getProducts === 'function' ? getProducts() : [];
+    const product = products.find(d => d.barcode === barcode || d.name.toLowerCase().includes(barcode.toLowerCase()));
+    if (product) {
+      if (typeof addToCart === 'function') addToCart(product.id);
+      if (typeof showToast === 'function') showToast(`Produk '${product.name}' ditambahkan`);
+    } else {
+      if (typeof showToast === 'function') showToast(`Kode '${barcode}' tidak ditemukan`, 'error');
+    }
+  });
+});
+
+document.getElementById('btn-close-scanner')?.addEventListener('click', stopScanner);
+
+// Listener untuk Scanner Gun USB/Bluetooth (Input Enter)
+document.getElementById('pos-search')?.addEventListener('keypress', function (e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const barcode = this.value.trim();
+    if (!barcode) return;
+
+    let products = typeof getProducts === 'function' ? getProducts() : [];
+    const product = products.find(d => d.barcode === barcode || d.name.toLowerCase() === barcode.toLowerCase());
+    
+    if (product) {
+      if (typeof addToCart === 'function') addToCart(product.id);
+      if (typeof showToast === 'function') showToast(`Produk '${product.name}' berhasil ditambahkan`);
+      this.value = '';
+    } else {
+      if (typeof showToast === 'function') showToast(`Kode '${barcode}' tidak ditemukan`, 'error');
+    }
+  }
+});
   </script>
- 
+ <!-- Modal Scan Barcode -->
+<div id="scanner-modal" class="modal-overlay">
+  <div class="bg-white rounded-xl p-4 w-full max-w-md mx-4 flex flex-col items-center">
+    <h3 class="font-bold text-lg mb-2 text-slate-800">Scan Barcode Produk</h3>
+    <div id="reader" class="w-full bg-slate-100 rounded-lg overflow-hidden min-h-[250px]"></div>
+    <button type="button" id="btn-close-scanner" class="mt-4 w-full py-2 bg-slate-200 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-300">
+      Tutup Kamera
+    </button>
+  </div>
+</div>
 </body>
 </html>
