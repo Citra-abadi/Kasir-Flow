@@ -2885,86 +2885,162 @@ document.getElementById('pos-search')?.addEventListener('keypress', function (e)
     }
   }
 });
-    // --- FIX EVENT LISTENER & SINKRONISASI KASIR --- //
+    // ==========================================
+// SOLUSI TOTAL: PRODUK, KASIR & SINKRONISASI
+// ==========================================
 
-// 1. Render Produk di Kasir (POS)
-function renderPOSProducts() {
-  const products = typeof getProducts === 'function' ? getProducts() : JSON.parse(localStorage.getItem('products') || '[]');
-  const posContainer = document.getElementById('pos-products') || document.querySelector('#kasir .grid');
-  if (!posContainer) return;
-  
+// Helper Ambil & Simpan Data
+function getStoreData(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || []; } catch(e) { return []; }
+}
+function setStoreData(key, data) {
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// 1. Render Tabel Produk (Menu Produk)
+window.renderProducts = function() {
+  const products = getStoreData('products');
+  const tbody = document.getElementById('product-table-body');
+  if (!tbody) return;
+
   if (products.length === 0) {
-    posContainer.innerHTML = '<p class="col-span-full text-center text-slate-400 py-8">Belum ada produk tersedia</p>';
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-400">Belum ada data produk</td></tr>`;
     return;
   }
 
-  posContainer.innerHTML = products.map(p => `
-    <div class="bg-white border rounded-xl p-3 flex flex-col justify-between hover:shadow-md transition cursor-pointer" onclick="addToCart('${p.id}')">
-      <div>
-        <div class="h-24 bg-slate-100 rounded-lg flex items-center justify-center mb-2 overflow-hidden">
-          ${p.image ? `<img src="${p.image}" class="h-full w-full object-contain">` : '<span class="text-xs text-slate-400">Tidak ada foto</span>'}
+  tbody.innerHTML = products.map((p, index) => `
+    <tr class="border-b hover:bg-slate-50" data-id="${p.id || index}">
+      <td class="p-3">
+        <div class="w-10 h-10 bg-slate-100 rounded flex items-center justify-center overflow-hidden">
+          ${p.image ? `<img src="${p.image}" class="w-full h-full object-cover">` : '<span class="text-[10px] text-slate-400">No Img</span>'}
         </div>
-        <h4 class="font-bold text-slate-800 text-sm line-clamp-1">${p.name}</h4>
-        <p class="text-xs text-slate-500">${p.category || 'Umum'}</p>
+      </td>
+      <td class="p-3 font-medium text-slate-800">${p.name || '-'}</td>
+      <td class="p-3 text-slate-500">${p.barcode || '-'}</td>
+      <td class="p-3 text-slate-500">${p.category || 'Umum'}</td>
+      <td class="p-3 text-right">Rp ${(Number(p.buyPrice) || 0).toLocaleString('id-ID')}</td>
+      <td class="p-3 text-right font-semibold text-slate-700">Rp ${(Number(p.price || p.sellPrice) || 0).toLocaleString('id-ID')}</td>
+      <td class="p-3 text-right font-bold ${Number(p.stock) <= 0 ? 'text-red-500' : 'text-slate-700'}">${p.stock || 0}</td>
+      <td class="p-3 text-center space-x-1">
+        <button type="button" onclick="editProductAction(${index})" class="px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-xs font-semibold">Edit</button>
+        <button type="button" onclick="deleteProductAction(${index})" class="px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 text-xs font-semibold">Hapus</button>
+      </td>
+    </tr>
+  `).join('');
+};
+
+// 2. Render Produk di Menu Kasir (POS)
+window.renderPOSProducts = function() {
+  const products = getStoreData('products');
+  const posContainer = document.getElementById('pos-products');
+  if (!posContainer) return;
+
+  if (products.length === 0) {
+    posContainer.innerHTML = `<p class="col-span-full text-center text-slate-400 py-10">Tidak ada produk untuk dijual</p>`;
+    return;
+  }
+
+  posContainer.innerHTML = products.map((p, index) => `
+    <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-between hover:shadow-md transition cursor-pointer select-none" onclick="addToCartAction(${index})">
+      <div>
+        <div class="h-20 bg-slate-100 rounded-lg flex items-center justify-center mb-2 overflow-hidden">
+          ${p.image ? `<img src="${p.image}" class="h-full w-full object-cover">` : '<span class="text-xs text-slate-400">Tidak ada foto</span>'}
+        </div>
+        <h4 class="font-bold text-slate-800 text-xs line-clamp-2">${p.name || 'Produk'}</h4>
+        <p class="text-[10px] text-slate-400">${p.category || 'Umum'}</p>
       </div>
       <div class="mt-2 flex items-center justify-between">
-        <span class="font-bold text-blue-600 text-sm">Rp ${Number(p.price || 0).toLocaleString('id-ID')}</span>
-        <span class="text-[11px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded">Stok: ${p.stock || 0}</span>
+        <span class="font-bold text-blue-600 text-xs">Rp ${(Number(p.price || p.sellPrice) || 0).toLocaleString('id-ID')}</span>
+        <span class="text-[10px] px-1.5 py-0.5 ${Number(p.stock) <= 0 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'} rounded">Stok: ${p.stock || 0}</span>
       </div>
     </div>
   `).join('');
+};
+
+// 3. Aksi Tambah & Edit Produk
+window.openAddProductModal = function() {
+  const name = prompt("Masukkan Nama Produk:");
+  if (!name) return;
+  
+  const price = parseFloat(prompt("Masukkan Harga Jual (Rp):", "10000")) || 0;
+  const buyPrice = parseFloat(prompt("Masukkan Harga Beli Modal (Rp):", "0")) || 0;
+  const stock = parseInt(prompt("Masukkan Jumlah Stok Initial:", "10")) || 0;
+  const category = prompt("Masukkan Kategori:", "Umum") || "Umum";
+  const barcode = prompt("Masukkan Kode Batang / Barcode (Opsional):", "") || "-";
+
+  const products = getStoreData('products');
+  products.push({
+    id: 'PROD-' + Date.now(),
+    name: name,
+    price: price,
+    buyPrice: buyPrice,
+    stock: stock,
+    category: category,
+    barcode: barcode
+  });
+
+  setStoreData('products', products);
+  refreshAllData();
+  alert("Produk berhasil ditambahkan!");
+};
+
+window.editProductAction = function(index) {
+  const products = getStoreData('products');
+  const p = products[index];
+  if (!p) return;
+
+  const newName = prompt("Edit Nama Produk:", p.name) || p.name;
+  const newPrice = parseFloat(prompt("Edit Harga Jual (Rp):", p.price || p.sellPrice)) || 0;
+  const newBuyPrice = parseFloat(prompt("Edit Harga Beli (Rp):", p.buyPrice)) || 0;
+  const newStock = parseInt(prompt("Edit Stok:", p.stock)) || 0;
+  const newCat = prompt("Edit Kategori:", p.category) || p.category;
+
+  products[index] = {
+    ...p,
+    name: newName,
+    price: newPrice,
+    buyPrice: newBuyPrice,
+    stock: newStock,
+    category: newCat
+  };
+
+  setStoreData('products', products);
+  refreshAllData();
+  alert("Produk berhasil diperbarui!");
+};
+
+// 4. Aksi Hapus Produk
+window.deleteProductAction = function(index) {
+  if (confirm("Apakah Anda yakin ingin menghapus produk ini?")) {
+    const products = getStoreData('products');
+    products.splice(index, 1);
+    setStoreData('products', products);
+    refreshAllData();
+  }
+};
+
+// 5. Auto Refresh Semua Menu
+function refreshAllData() {
+  if (typeof renderProducts === 'function') renderProducts();
+  if (typeof renderPOSProducts === 'function') renderPOSProducts();
 }
 
-// 2. Hubungkan Tombol Tambah Produk dengan Modal Form
-document.addEventListener('click', function(e) {
-  // Tombol Tambah Produk
-  if (e.target.closest('#btn-add-product') || e.target.closest('[data-target="modal-product"]')) {
-    const modal = document.getElementById('modal-product') || document.getElementById('product-modal');
-    if (modal) modal.classList.add('show');
+// Event Bindings
+document.addEventListener('DOMContentLoaded', () => {
+  refreshAllData();
+
+  const btnAdd = document.getElementById('btn-add-product');
+  if (btnAdd) {
+    btnAdd.onclick = window.openAddProductModal;
   }
 });
 
-// 3. Otomatis Render Data saat Navigasi/Menu Diklik
-document.querySelectorAll('a, button, .nav-item').forEach(nav => {
-  nav.addEventListener('click', () => {
-    setTimeout(() => {
-      if (typeof renderProducts === 'function') renderProducts();
-      renderPOSProducts();
-    }, 50);
-  });
+// Jalankan sinkronisasi saat pengguna berpindah menu/tab
+document.addEventListener('click', () => {
+  setTimeout(refreshAllData, 100);
 });
 
-// Run awal saat load
-renderPOSProducts();
-    // 4. Handler Global untuk Tombol Edit & Hapus Produk
-document.addEventListener('click', function(e) {
-  // Tombol Hapus Produk
-  const btnDelete = e.target.closest('.btn-delete-product') || (e.target.innerText === 'Hapus' ? e.target : null);
-  if (btnDelete) {
-    const row = btnDelete.closest('tr');
-    const productId = row ? row.getAttribute('data-id') : null;
-    if (confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
-      let products = typeof getProducts === 'function' ? getProducts() : JSON.parse(localStorage.getItem('products') || '[]');
-      if (productId) {
-        products = products.filter(p => p.id !== productId);
-      } else {
-        const index = Array.from(row.parentNode.children).indexOf(row);
-        products.splice(index, 1);
-      }
-      localStorage.setItem('products', JSON.stringify(products));
-      if (typeof renderProducts === 'function') renderProducts();
-      if (typeof renderPOSProducts === 'function') renderPOSProducts();
-      if (typeof showToast === 'function') showToast('Produk berhasil dihapus');
-    }
-  }
-
-  // Tombol Edit Produk
-  const btnEdit = e.target.closest('.btn-edit-product') || (e.target.innerText === 'Edit' ? e.target : null);
-  if (btnEdit) {
-    const modal = document.getElementById('modal-product') || document.getElementById('product-modal');
-    if (modal) modal.classList.add('show');
-  }
-});
+refreshAllData();
   </script>
  <!-- Modal Scan Barcode -->
 <div id="scanner-modal" class="modal-overlay">
